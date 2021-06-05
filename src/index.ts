@@ -8,10 +8,11 @@ import User from './database/models/User';
 import authRoutes from './routes/auth';
 
 const DiscordStrategy = require('passport-discord').Strategy;
+
+// Middleware setup ===========================================
 const app = express();
 app.use(helmet());
-
-// Set up sessions
+app.use(express.json());
 app.use(sessions({
     cookieName: "session", // cookie name dictates the key name added to the request object
     secret: config.sessions.secret, // should be a large unguessable string
@@ -26,14 +27,18 @@ app.use(sessions({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Configure passport sessions
-passport.serializeUser((user: any, done: any) => done(null, user.id));
-
-passport.deserializeUser((id: any, done: any) => {
-    User.findById(id, (err: any, user: any) => done(err, user));
+// Configure passport sessions ================================
+passport.serializeUser(function (user: any, done) {
+    done(null, user.id);
 });
 
-// Set up Passport Discord Strategy
+passport.deserializeUser(function (id, done) {
+    User.findById(id, function (err: any, user: any) {
+        done(err, user);
+    });
+});
+
+// Set up Passport Discord Strategy ===========================
 passport.use(new DiscordStrategy({
     clientID: config.discordClient.id,
     clientSecret: config.discordClient.secret,
@@ -41,19 +46,25 @@ passport.use(new DiscordStrategy({
     scope: ['identify', 'guilds']
 },
     (accessToken: any, refreshToken: any, profile: any, cb: any) => {
-        User.findOneAndUpdate({ discordId: profile.id }, // query
-            { discordId: profile.id, username: profile.username }, // update
-            { upsert: true }, // options (upsert: true creates the object if it doesn't exist.)
-            function (err, user) { // callback
-                return cb(err, user);
-            });
+        // Only log user in if they are in the 150 percent server.
+        let userEligible = checkUserEligibility(profile.guilds);
+        if (userEligible) {
+            User.findOneAndUpdate({ discordId: profile.id }, // query
+                { discordId: profile.id, username: `${profile.username}#${profile.discriminator}` }, // update
+                { upsert: true, useFindAndModify: false }, // options (upsert: true creates the object if it doesn't exist.)
+                function (err, user) { // callback
+                    return cb(err, user);
+                });
+        } else {
+            return cb();
+        }
     })
 );
 
-// Routes
+// Routes =====================================================
 app.use("/auth", authRoutes);
 
-// Connect to DB and start express server.
+// Connect to DB and start express server. ====================
 mongoose.connect(config.mongo.url, config.mongo.options)
     .then(() => {
         console.log("Connected to the database");
@@ -61,3 +72,13 @@ mongoose.connect(config.mongo.url, config.mongo.options)
             console.log(`Server started on port ${config.port}`);
         });
     })
+
+// Custom functions ===========================================
+function checkUserEligibility(guilds: any): boolean {
+    let userEligible = false;
+    guilds.forEach((guild: any) => {
+        if (guild.id === '614918030870183963')
+            userEligible = true;
+    });
+    return userEligible;
+}

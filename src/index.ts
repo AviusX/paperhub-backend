@@ -49,8 +49,14 @@ passport.use(new DiscordStrategy({
         // Only log user in if they are in the 150 percent server.
         let userEligible = checkUserEligibility(profile.guilds);
         if (userEligible) {
-            User.findOneAndUpdate({ discordId: profile.id }, // query
-                { discordId: profile.id, username: `${profile.username}#${profile.discriminator}` }, // update
+            User.findOneAndUpdate({
+                discordId: profile.id
+            }, // query
+                {
+                    discordId: profile.id,
+                    username: profile.username,
+                    discriminator: profile.discriminator
+                }, // update
                 { upsert: true, useFindAndModify: false }, // options (upsert: true creates the object if it doesn't exist.)
                 function (err, user) { // callback
                     return cb(err, user);

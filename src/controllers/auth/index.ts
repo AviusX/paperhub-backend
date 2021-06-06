@@ -11,12 +11,18 @@ export const logout = (req: Request, res: Response) => {
 };
 
 export const checkAuthenticated = (req: Request, res: Response) => {
+    // If user is authenticated, send the user data,
+    // else, tell the client that the user is not authenticated
+    // and that there is no data to send. Also clear session cookie.
     if (req.user) {
         res.status(200).json({
             discordId: (req.user as IUser).discordId,
-            username: (req.user as IUser).username
+            username: (req.user as IUser).username,
+            discriminator: (req.user as IUser).discriminator
         });
     }
-    else
-        res.status(401).json({ message: "User not logged in." });
+    else {
+        res.clearCookie("session");
+        res.sendStatus(204);
+    }
 };

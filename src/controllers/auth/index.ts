@@ -4,6 +4,7 @@ import IUser from '../../database/interfaces/IUser';
 export const logout = (req: Request, res: Response) => {
     if (req.user) {
         req.logout();
+        res.clearCookie("session");
         res.json({ message: "Logout successful" });
     } else {
         res.status(400).json({ message: "You need to be logged in to logout." });

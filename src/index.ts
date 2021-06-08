@@ -6,6 +6,7 @@ import sessions from 'client-sessions';
 import config from '../config';
 import User from './database/models/User';
 import authRoutes from './routes/auth';
+import wallpaperRoutes from './routes/wallpapers';
 
 const DiscordStrategy = require('passport-discord').Strategy;
 
@@ -68,7 +69,8 @@ passport.use(new DiscordStrategy({
 );
 
 // Routes =====================================================
-app.use("/auth", authRoutes);
+app.use('/auth', authRoutes);
+app.use('/wallpapers', wallpaperRoutes);
 
 // Connect to DB and start express server. ====================
 mongoose.connect(config.mongo.url, config.mongo.options)

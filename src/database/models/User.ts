@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose';
+import IUser from '../interfaces/IUser';
 
 const userSchema = new Schema({
     discordId: { type: String, required: true },
@@ -8,4 +9,4 @@ const userSchema = new Schema({
     postedWallpapers: [Schema.Types.ObjectId]
 });
 
-export default model("User", userSchema);
+export default model<IUser>("User", userSchema);

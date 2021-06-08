@@ -1,5 +1,6 @@
 import express from 'express';
 import passport from 'passport';
+import isLoggedIn from '../middleware/isLoggedIn';
 import { logout, checkAuthenticated } from '../controllers/auth/index';
 
 const router = express.Router();
@@ -9,7 +10,7 @@ router.get('/discord/callback', passport.authenticate('discord', {
     successRedirect: "http://localhost:3000",
     failureRedirect: "http://localhost:3000"
 }));
-router.get('/logout', logout);
+router.get('/logout', isLoggedIn, logout);
 router.get('/check', checkAuthenticated);
 
 

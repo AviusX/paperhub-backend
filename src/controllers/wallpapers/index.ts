@@ -17,7 +17,7 @@ const upload = multer({
     fileFilter
 }).array('wallpapers', 10);
 
-export const uploadWallpaper = (req: Request, res: Response) => {
+export const uploadWallpapers = (req: Request, res: Response) => {
     upload(req, res, async function (err: any) {
         if (err instanceof MulterError && err.code === "LIMIT_FILE_SIZE") {
             // If image size is bigger than the limit, send error response.
@@ -39,13 +39,15 @@ export const uploadWallpaper = (req: Request, res: Response) => {
             // Otherwise, proceed with adding stuff to database.
 
             const files = req.files as Express.Multer.File[];
+            const title = req.body.title;
+
             for (let file of files) {
                 const dimensions = sizeOf(file.path);
 
                 // Save the wallpaper to the database
                 await new Wallpaper({
                     owner: (req.user as IUser)._id,
-                    title: file.originalname,
+                    title: title,
                     imagePath: file.path,
                     width: dimensions.width,
                     height: dimensions.height,

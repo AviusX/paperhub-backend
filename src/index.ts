@@ -2,6 +2,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import passport from 'passport';
 import helmet from 'helmet';
+import path from 'path';
 import sessions from 'client-sessions';
 import config from '../config';
 import User from './database/models/User';
@@ -27,6 +28,7 @@ app.use(sessions({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Configure passport sessions ================================
 passport.serializeUser(function (user: any, done) {

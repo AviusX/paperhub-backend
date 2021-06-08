@@ -11,7 +11,7 @@ import sizeOf from 'image-size';
 // https://stackoverflow.com/a/65378054/10509081
 
 const upload = multer({
-    dest: 'uploads/wallpapers',
+    dest: 'public/wallpapers',
     limits: {
         fileSize: 1024 * 1024 * 30 // Allow a max of 30 MB image size.
     },
@@ -21,42 +21,12 @@ const upload = multer({
 export const getAllWallpapers = async (req: Request, res: Response) => {
     await Wallpaper.find()
         .then(wallpapers => {
-            res.status(200).json({ wallpapers });
+            res.status(200).json(wallpapers);
         })
         .catch(err => {
             console.error("There was an error while fetching wallpapers", err);
             res.status(500).json({ message: "There was an error while fetching wallpapers." });
         });
-}
-
-export const getWallpaper = async (req: Request, res: Response) => {
-    const wallpaperId: string = req.params.id;
-    let errStatusCode: number | undefined;
-    let errMessage: string | undefined;
-    let wallpaperPath: string = "";
-
-    await Wallpaper.findById(wallpaperId)
-        .then(wallpaper => {
-            if (wallpaper) {
-                wallpaperPath = wallpaper.imagePath;
-            } else {
-                errStatusCode = 404;
-                errMessage = "Wallpaper not found";
-            }
-        })
-        .catch(err => {
-            console.error("There was an error while fetching the wallpaper:\n", err);
-            errStatusCode = 500;
-            errMessage = "There was an error.";
-        });
-
-    if (errStatusCode && errMessage) {
-        return res.status(errStatusCode).json({ message: errMessage });
-    }
-    // Get the path of uploads directory (which is supposed to be in project root)
-    // by resolving a path using the path of this file.
-    wallpaperPath = path.resolve(__dirname + '../../../../') + '/' + wallpaperPath
-    return res.status(200).sendFile(wallpaperPath);
 }
 
 export const uploadWallpaper = (req: Request, res: Response) => {

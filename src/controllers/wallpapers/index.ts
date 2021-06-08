@@ -2,7 +2,6 @@ import User from '../../database/models/User';
 import Wallpaper from '../../database/models/Wallpaper';
 import IUser from '../../database/interfaces/IUser';
 import { Request, Response } from 'express';
-import path from 'path';
 import multer, { MulterError, FileFilterCallback } from 'multer';
 import { unlink } from 'fs/promises';
 import sizeOf from 'image-size';
@@ -89,6 +88,12 @@ export const uploadWallpaper = (req: Request, res: Response) => {
 
 export const deleteWallpapers = async (req: Request, res: Response) => {
     const wallpaperIds: string[] = req.body.ids;
+
+    // If req.body.ids is empty or undefined, return bad request error.
+    if (!wallpaperIds) {
+        return res.status(400).json({ message: "The array of wallpaper ids was empty/undefined" });
+    }
+
     // Confirm that all of the wallpapers in the array are "owned" by the logged in user.
     const isOwner = await confirmOwnership(wallpaperIds, (req.user as IUser)._id);
     let errStatusCode: number | undefined;
@@ -125,7 +130,6 @@ export const deleteWallpapers = async (req: Request, res: Response) => {
                 errMessage = "Something went wrong";
             });
     }
-
     if (errStatusCode && errMessage) {
         return res.status(errStatusCode).json({ message: errMessage });
     }

@@ -15,9 +15,9 @@ const upload = multer({
         fileSize: 1024 * 1024 * 30 // Allow a max of 30 MB image size.
     },
     fileFilter
-}).array('wallpapers', 10);
+}).single('wallpaper');
 
-export const uploadWallpapers = (req: Request, res: Response) => {
+export const uploadWallpaper = (req: Request, res: Response) => {
     upload(req, res, async function (err: any) {
         if (err instanceof MulterError && err.code === "LIMIT_FILE_SIZE") {
             // If image size is bigger than the limit, send error response.
@@ -25,68 +25,113 @@ export const uploadWallpapers = (req: Request, res: Response) => {
             res.status(413).json({
                 message: "Image size should not be bigger than 30 MB."
             });
-        } else if (err instanceof MulterError && err.code === "LIMIT_UNEXPECTED_FILE") {
-            // If there are more than 10 files being uploaded at once, send error response.
-
-            res.status(413).json({
-                message: "You cannot upload more than 10 files at once."
-            });
         } else if (err) {
             // If file is not an image, send error response.
+            // This err is set by the fileFilter function.
 
             res.status(415).json({ message: err.message });
         } else {
             // Otherwise, proceed with adding stuff to database.
 
-            const files = req.files as Express.Multer.File[];
+            const file = req.file as Express.Multer.File;
             const title = req.body.title;
 
-            for (let file of files) {
-                const dimensions = sizeOf(file.path);
+            const dimensions = sizeOf(file.path);
 
-                // Save the wallpaper to the database
-                await new Wallpaper({
-                    owner: (req.user as IUser)._id,
-                    title: title,
-                    imagePath: file.path,
-                    width: dimensions.width,
-                    height: dimensions.height,
+            // Save the wallpaper to the database
+            await new Wallpaper({
+                owner: (req.user as IUser)._id,
+                title: title,
+                imagePath: file.path,
+                width: dimensions.width,
+                height: dimensions.height,
+            })
+                .save()
+                .then(newWallpaper => {
+                    // Add the newly created wallpaper's reference to the owner's 
+                    // model as well.
+                    return User.findOneAndUpdate(
+                        { _id: (req.user as IUser)._id }, // Find the owner
+                        { $push: { postedWallpapers: newWallpaper._id } }, // Push new wallpaper
+                        { useFindAndModify: false } // options
+                    );
                 })
-                    .save()
-                    .then(newWallpaper => {
-                        // Add the newly created wallpaper's reference to the owner's 
-                        // model as well.
-                        return User.findOneAndUpdate({
-                            _id: (req.user as IUser)._id // Find the owner
-                        }, {
-                            $push: { postedWallpapers: newWallpaper._id } // Push new wallpaper
-                        }, { useFindAndModify: false } // options
-                        );
-                    })
-                    .then(() => {
-                        res.status(201).json({ message: "Wallpaper(s) uploaded successfully" });
-                    })
-                    .catch(err => {
-                        // If wallpaper cannot be added to the database for some reason,
-                        // delete the uploaded file from the filesystem to prevent piling
-                        // up of useless image files.
-                        res.status(500).json({ message: "Something went wrong." });
-                        console.error(err);
-                        unlink(file.path)
-                            .then(() => console.log("Uploaded file deleted because something went wrong"))
-                            .catch(err => {
-                                console.error("Something went wrong while deleting the uploaded file", err);
-                            });
-                    });
-            }
+                .then(() => {
+                    res.status(201).json({ message: "Wallpaper uploaded successfully." });
+                })
+                .catch(err => {
+                    // If wallpaper cannot be added to the database for some reason,
+                    // delete the uploaded file from the filesystem to prevent piling
+                    // up of useless image files.
+                    res.status(500).json({ message: "Something went wrong." });
+                    console.error(err);
+                    unlink(file.path)
+                        .then(() => console.log("Uploaded file deleted because something went wrong."))
+                        .catch(err => {
+                            console.error("Something went wrong while deleting the uploaded file:", err);
+                        });
+                });
         }
     });
 }
 
-// Custom functions ===========================================
-function fileFilter(req: Request, file: Express.Multer.File, cb: FileFilterCallback) {
-    const fileType = /^image\//;
+export const deleteWallpapers = async (req: Request, res: Response) => {
+    const wallpaperIds: string[] = req.body.ids;
+    // Confirm that all of the wallpapers in the array are "owned" by the logged in user.
+    const isOwner = await confirmOwnership(wallpaperIds, (req.user as IUser)._id);
+    let errStatusCode: number | undefined;
+    let errMessage: string | undefined;
 
+    if (!isOwner) {
+        return res.status(403).json({ message: "You cannot delete a wallpaper you did not post." });
+    }
+
+    // Delete each wallpaper from array and then
+    // also delete them from the postedWallpapers array in user model.
+    for (let wallpaperId of wallpaperIds) {
+        await Wallpaper.findByIdAndDelete(wallpaperId)
+            .then(deletedWallpaper => {
+                // Delete the file from filesystem
+                if (deletedWallpaper) {
+                    unlink(deletedWallpaper.imagePath)
+                        .catch(err => {
+                            console.error("Something went wrong while deleting the wallpaper from fs.", err);
+                        });
+
+                    return User.updateOne(
+                        { _id: (req.user as IUser)._id },
+                        { $pull: { postedWallpapers: deletedWallpaper?._id } }
+                    )
+                } else {
+                    errStatusCode = 404;
+                    errMessage = "Wallpaper with the given id not found and could not be deleted.";
+                }
+            })
+            .catch(err => {
+                console.log("There was an error while deleting wallpapers:");
+                console.error(err);
+                errStatusCode = 500;
+                errMessage = "Something went wrong";
+            });
+    }
+
+    if (errStatusCode && errMessage) {
+        return res.status(errStatusCode).json({ message: errMessage });
+    }
+    return res.status(200).json({ message: "Wallpaper(s) deleted successfully" });
+}
+
+// Custom functions ===========================================
+
+/**
+ * Determines which file should be saved and which file should not be saved
+ *
+ * @param {Request} _req
+ * @param {Express.Multer.File} file
+ * @param {FileFilterCallback} cb
+ */
+function fileFilter(_req: Request, file: Express.Multer.File, cb: FileFilterCallback) {
+    const fileType = /^image\//;
     // If the file was not an image, throw error.
     // else, save the image to filesystem.
     if (!fileType.test(file.mimetype)) {
@@ -94,4 +139,33 @@ function fileFilter(req: Request, file: Express.Multer.File, cb: FileFilterCallb
     } else {
         cb(null, true);
     }
+}
+
+/**
+ * Takes an array of wallpaper ids and a user id
+ * and confirms that the given user owns all of those wallpapers
+ *
+ * @param {string[]} wallpaperIds The array of wallpaper ids
+ * @param {string} userId The user id that we wish to confirm as the owner
+ */
+async function confirmOwnership(wallpaperIds: string[], userId: string) {
+    // If for any id in array, the user id does not match the owner,
+    // return false
+    for (let id of wallpaperIds) {
+        await Wallpaper.findById(id)
+            .then(wallpaper => {
+                if (!wallpaper?.owner.equals(userId)) {
+                    return false
+                }
+            })
+            .catch(err => {
+                // If anything goes wrong, return false and log error.
+                console.log("Something went wrong in confirmOwnership(wallpaperIds, userId):");
+                console.error(err);
+                return false;
+            });
+    }
+    // If all of the above wallpapers have the same owner as userId,
+    // return true
+    return true;
 }

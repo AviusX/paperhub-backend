@@ -2,6 +2,7 @@ import User from '../../database/models/User';
 import Wallpaper from '../../database/models/Wallpaper';
 import IUser from '../../database/interfaces/IUser';
 import { Request, Response } from 'express';
+import path from 'path';
 import multer, { MulterError, FileFilterCallback } from 'multer';
 import { unlink } from 'fs/promises';
 import sizeOf from 'image-size';
@@ -16,6 +17,47 @@ const upload = multer({
     },
     fileFilter
 }).single('wallpaper');
+
+export const getAllWallpapers = async (req: Request, res: Response) => {
+    await Wallpaper.find()
+        .then(wallpapers => {
+            res.status(200).json({ wallpapers });
+        })
+        .catch(err => {
+            console.error("There was an error while fetching wallpapers", err);
+            res.status(500).json({ message: "There was an error while fetching wallpapers." });
+        });
+}
+
+export const getWallpaper = async (req: Request, res: Response) => {
+    const wallpaperId: string = req.params.id;
+    let errStatusCode: number | undefined;
+    let errMessage: string | undefined;
+    let wallpaperPath: string = "";
+
+    await Wallpaper.findById(wallpaperId)
+        .then(wallpaper => {
+            if (wallpaper) {
+                wallpaperPath = wallpaper.imagePath;
+            } else {
+                errStatusCode = 404;
+                errMessage = "Wallpaper not found";
+            }
+        })
+        .catch(err => {
+            console.error("There was an error while fetching the wallpaper:\n", err);
+            errStatusCode = 500;
+            errMessage = "There was an error.";
+        });
+
+    if (errStatusCode && errMessage) {
+        return res.status(errStatusCode).json({ message: errMessage });
+    }
+    // Get the path of uploads directory (which is supposed to be in project root)
+    // by resolving a path using the path of this file.
+    wallpaperPath = path.resolve(__dirname + '../../../../') + '/' + wallpaperPath
+    return res.status(200).sendFile(wallpaperPath);
+}
 
 export const uploadWallpaper = (req: Request, res: Response) => {
     upload(req, res, async function (err: any) {
@@ -64,11 +106,11 @@ export const uploadWallpaper = (req: Request, res: Response) => {
                     // delete the uploaded file from the filesystem to prevent piling
                     // up of useless image files.
                     res.status(500).json({ message: "Something went wrong." });
-                    console.error(err);
+                    console.error("There was an error while uploading the wallpaper:\n", err);
                     unlink(file.path)
                         .then(() => console.log("Uploaded file deleted because something went wrong."))
                         .catch(err => {
-                            console.error("Something went wrong while deleting the uploaded file:", err);
+                            console.error("Something went wrong while deleting the uploaded file:\n", err);
                         });
                 });
         }
@@ -95,7 +137,7 @@ export const deleteWallpapers = async (req: Request, res: Response) => {
                 if (deletedWallpaper) {
                     unlink(deletedWallpaper.imagePath)
                         .catch(err => {
-                            console.error("Something went wrong while deleting the wallpaper from fs.", err);
+                            console.error("Something went wrong while deleting the wallpaper from fs:\n", err);
                         });
 
                     return User.updateOne(
@@ -108,8 +150,7 @@ export const deleteWallpapers = async (req: Request, res: Response) => {
                 }
             })
             .catch(err => {
-                console.log("There was an error while deleting wallpapers:");
-                console.error(err);
+                console.error("There was an error while deleting the wallpapers:\n", err);
                 errStatusCode = 500;
                 errMessage = "Something went wrong";
             });
@@ -160,8 +201,7 @@ async function confirmOwnership(wallpaperIds: string[], userId: string) {
             })
             .catch(err => {
                 // If anything goes wrong, return false and log error.
-                console.log("Something went wrong in confirmOwnership(wallpaperIds, userId):");
-                console.error(err);
+                console.error("Something went wrong in confirmOwnership(wallpaperIds, userId):\n", err);
                 return false;
             });
     }

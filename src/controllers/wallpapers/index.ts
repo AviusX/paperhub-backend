@@ -20,16 +20,24 @@ const upload = multer({
 export const uploadWallpaper = (req: Request, res: Response) => {
     upload(req, res, async function (err: any) {
         if (err instanceof MulterError && err.code === "LIMIT_FILE_SIZE") {
+            // If image size is bigger than the limit, send error response.
+
             res.status(413).json({
                 message: "Image size should not be bigger than 30 MB."
             });
         } else if (err instanceof MulterError && err.code === "LIMIT_UNEXPECTED_FILE") {
+            // If there are more than 10 files being uploaded at once, send error response.
+
             res.status(413).json({
                 message: "You cannot upload more than 10 files at once."
             });
         } else if (err) {
+            // If file is not an image, send error response.
+
             res.status(415).json({ message: err.message });
         } else {
+            // Otherwise, proceed with adding stuff to database.
+
             const files = req.files as Express.Multer.File[];
             for (let file of files) {
                 const dimensions = sizeOf(file.path);

@@ -2,6 +2,7 @@ import User from '../../database/models/User';
 import Wallpaper from '../../database/models/Wallpaper';
 import IUser from '../../database/interfaces/IUser';
 import { Request, Response } from 'express';
+import path from 'path';
 import multer, { MulterError, FileFilterCallback } from 'multer';
 import { unlink } from 'fs/promises';
 import sizeOf from 'image-size';
@@ -26,6 +27,49 @@ export const getAllWallpapers = async (req: Request, res: Response) => {
             console.error("There was an error while fetching wallpapers", err);
             res.status(500).json({ message: "There was an error while fetching wallpapers." });
         });
+}
+
+export const getWallpaper = async (req: Request, res: Response) => {
+    const wallpaperId = req.params.id;
+    let wallpaperPath: string = ""; // This is assigned if wallpaper is found.
+
+    // Assigned if anything goes wrong with db operations.
+    let errStatusCode: number | undefined;
+    let errMessage: string | undefined;
+
+    await Wallpaper.findById(wallpaperId)
+        .then(wallpaper => {
+            if (wallpaper) {
+                wallpaperPath = wallpaper.imagePath;
+                return wallpaper._id;
+            } else {
+                errStatusCode = 400;
+                errMessage = "Wallpaper not found.";
+            }
+        })
+        // If the wallpaper is found, we want to increment its download count by 1.
+        .then(wallpaperId => {
+            return Wallpaper.findOneAndUpdate(
+                { _id: wallpaperId }, // Search for this wallpaper.
+                { $inc: { downloadCount: 1 } }, // Increment the download count.
+                { useFindAndModify: false } // options
+            )
+        })
+        .catch(err => {
+            console.error("Something went wrong while fetching the wallpaper.", err);
+            errStatusCode = 500;
+            errMessage = "Something went wrong.";
+        });
+
+    // If anything goes wrong, send the assigned error message & status code.
+    if (errStatusCode && errMessage) {
+        return res.status(errStatusCode).json({ message: errMessage });
+    }
+
+    // Get the path of uploads directory (which is supposed to be in project root)
+    // by resolving a path using the path of this file.
+    wallpaperPath = path.resolve(__dirname + '../../../../') + '/' + wallpaperPath
+    return res.status(200).sendFile(wallpaperPath);
 }
 
 export const uploadWallpaper = (req: Request, res: Response) => {

@@ -8,8 +8,8 @@ const wallpaperSchema = new Schema({
     width: { type: Number, required: true },
     height: { type: Number, required: true },
     tags: [Schema.Types.ObjectId],
+    downloadCount: { type: Number, default: 0 },
     postedAt: { type: Date, default: Date.now },
-    likes: [Schema.Types.ObjectId]
 });
 
 export default model<IWallpaper>("Wallpaper", wallpaperSchema);

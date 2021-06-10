@@ -7,7 +7,7 @@ interface IWallpaper extends Document {
     width: number;
     height: number;
     tags?: Types.ObjectId[];
-    likes?: Types.ObjectId[];
+    downloadCount?: number;
 }
 
 export default IWallpaper;

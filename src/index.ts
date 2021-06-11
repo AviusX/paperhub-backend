@@ -13,7 +13,10 @@ const DiscordStrategy = require('passport-discord').Strategy;
 
 // Middleware setup ===========================================
 const app = express();
-app.use(helmet());
+
+// Helmet without contentSecurityPolicyset to false
+// blocks the react frontend from loading for some reason.
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
 app.use(sessions({
     cookieName: "session", // cookie name dictates the key name added to the request object

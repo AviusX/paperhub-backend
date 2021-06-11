@@ -31,7 +31,10 @@ export const getAllWallpapers = async (req: Request, res: Response) => {
 
 export const getWallpaper = async (req: Request, res: Response) => {
     const wallpaperId = req.params.id;
-    let wallpaperPath: string = ""; // This is assigned if wallpaper is found.
+
+    // These are assigned if wallpaper is found.
+    let wallpaperPath: string = "";
+    let wallpaperName: string = "";
 
     // Assigned if anything goes wrong with db operations.
     let errStatusCode: number | undefined;
@@ -41,6 +44,8 @@ export const getWallpaper = async (req: Request, res: Response) => {
         .then(wallpaper => {
             if (wallpaper) {
                 wallpaperPath = wallpaper.imagePath;
+                wallpaperName = wallpaper.title + "." + wallpaper.mimeType
+                    .substring("image/".length);
                 return wallpaper._id;
             } else {
                 errStatusCode = 400;
@@ -69,7 +74,7 @@ export const getWallpaper = async (req: Request, res: Response) => {
     // Get the path of uploads directory (which is supposed to be in project root)
     // by resolving a path using the path of this file.
     wallpaperPath = path.resolve(__dirname + '../../../../') + '/' + wallpaperPath
-    return res.status(200).sendFile(wallpaperPath);
+    return res.status(200).download(wallpaperPath, wallpaperName);
 }
 
 export const uploadWallpaper = (req: Request, res: Response) => {
@@ -98,6 +103,7 @@ export const uploadWallpaper = (req: Request, res: Response) => {
                 owner: (req.user as IUser)._id,
                 title: title,
                 imagePath: file.path,
+                mimeType: file.mimetype,
                 width: dimensions.width,
                 height: dimensions.height,
             })

@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import passport from 'passport';
 import helmet from 'helmet';
@@ -28,7 +28,12 @@ app.use(sessions({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Serve the static files such as wallpapers
 app.use(express.static(path.join(__dirname, '../public')));
+// Serve the static files from the built ReactJS client.
+const CLIENT_PATH = path.join(__dirname, '../build');
+app.use(express.static(CLIENT_PATH));
 
 // Configure passport sessions ================================
 passport.serializeUser(function (user: any, done) {
@@ -73,6 +78,12 @@ passport.use(new DiscordStrategy({
 // Routes =====================================================
 app.use('/auth', authRoutes);
 app.use('/wallpapers', wallpaperRoutes);
+
+// Serve client ===============================================
+app.get("/*", (_req: Request, res: Response) => {
+    res.sendFile(path.join(CLIENT_PATH, "index.html"));
+    console.log("Get client route reached.");
+})
 
 // Connect to DB and start express server. ====================
 mongoose.connect(config.mongo.url, config.mongo.options)

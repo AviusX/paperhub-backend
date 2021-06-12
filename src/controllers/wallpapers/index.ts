@@ -42,31 +42,26 @@ export const getWallpaper = async (req: Request, res: Response) => {
     let errStatusCode: number | undefined;
     let errMessage: string | undefined;
 
-    await Wallpaper.findById(wallpaperId)
-        .then(wallpaper => {
-            if (wallpaper) {
-                wallpaperPath = wallpaper.imagePath;
-                wallpaperName = wallpaper.title + "." + wallpaper.mimeType
-                    .substring("image/".length); // Get the file extension from mime type.
-                return wallpaper._id;
-            } else {
-                errStatusCode = 400;
-                errMessage = "Wallpaper not found.";
-            }
-        })
-        // If the wallpaper is found, we want to increment its download count by 1.
-        .then(wallpaperId => {
-            return Wallpaper.findOneAndUpdate(
-                { _id: wallpaperId }, // Search for this wallpaper.
-                { $inc: { downloadCount: 1 } }, // Increment the download count.
-                { useFindAndModify: false } // options
-            )
-        })
-        .catch(err => {
+    const foundWallpaper = await Wallpaper.findById(wallpaperId)
+
+    if (foundWallpaper) {
+        wallpaperPath = foundWallpaper.imagePath;
+        wallpaperName = foundWallpaper.title + "." + foundWallpaper.mimeType
+            .substring("image/".length); // Get the file extension from mime type.
+
+        await Wallpaper.findOneAndUpdate(
+            { _id: wallpaperId }, // Search for this wallpaper.
+            { $inc: { downloadCount: 1 } }, // Increment the download count.
+            { useFindAndModify: false } // options
+        ).catch(err => {
             console.error("Something went wrong while fetching the wallpaper.", err);
             errStatusCode = 500;
             errMessage = "Something went wrong.";
-        });
+        })
+    } else {
+        errStatusCode = 400;
+        errMessage = "Wallpaper not found.";
+    }
 
     // If anything goes wrong, send the assigned error message & status code.
     if (errStatusCode && errMessage) {

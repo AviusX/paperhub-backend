@@ -85,7 +85,6 @@ app.use('/wallpapers', wallpaperRoutes);
 // Serve client ===============================================
 app.get("/*", (_req: Request, res: Response) => {
     res.sendFile(path.join(CLIENT_PATH, "index.html"));
-    console.log("Get client route reached.");
 })
 
 // Connect to DB and start express server. ====================

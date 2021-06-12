@@ -2,7 +2,6 @@ import User from '../../database/models/User';
 import Wallpaper from '../../database/models/Wallpaper';
 import Tag from '../../database/models/Tag';
 import IUser from '../../database/interfaces/IUser';
-import ITag from '../../database/interfaces/ITag';
 import { Request, Response } from 'express';
 import path from 'path';
 import multer, { MulterError, FileFilterCallback } from 'multer';

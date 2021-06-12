@@ -8,6 +8,7 @@ import config from '../config';
 import User from './database/models/User';
 import authRoutes from './routes/auth';
 import wallpaperRoutes from './routes/wallpapers';
+import tagRoutes from './routes/tags';
 
 const DiscordStrategy = require('passport-discord').Strategy;
 
@@ -81,6 +82,7 @@ passport.use(new DiscordStrategy({
 // Routes =====================================================
 app.use('/auth', authRoutes);
 app.use('/wallpapers', wallpaperRoutes);
+app.use('/tags', tagRoutes);
 
 // Serve client ===============================================
 app.get("/*", (_req: Request, res: Response) => {

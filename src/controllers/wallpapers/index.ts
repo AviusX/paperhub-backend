@@ -1,6 +1,8 @@
 import User from '../../database/models/User';
 import Wallpaper from '../../database/models/Wallpaper';
+import Tag from '../../database/models/Tag';
 import IUser from '../../database/interfaces/IUser';
+import ITag from '../../database/interfaces/ITag';
 import { Request, Response } from 'express';
 import path from 'path';
 import multer, { MulterError, FileFilterCallback } from 'multer';
@@ -78,66 +80,101 @@ export const getWallpaper = async (req: Request, res: Response) => {
 }
 
 export const uploadWallpaper = (req: Request, res: Response) => {
+    let errStatusCode: number | undefined;
+    let errMessage: string | undefined;
+
     upload(req, res, async function (err: any) {
         if (err instanceof MulterError && err.code === "LIMIT_FILE_SIZE") {
             // If image size is bigger than the limit, send error response.
 
-            res.status(413).json({
-                message: "Image size should not be bigger than 30 MB."
-            });
+            errStatusCode = 413;
+            errMessage = "Image size should not be bigger than 30 MB.";
+            return;
         } else if (err) {
             // If file is not an image, send error response.
             // This err is set by the fileFilter function.
 
-            res.status(415).json({ message: err.message });
+            errStatusCode = 415;
+            errMessage = err.message;
+            return;
         } else {
             // Otherwise, proceed with adding stuff to database.
 
             const file = req.file as Express.Multer.File;
             const title = req.body.title;
-
             const dimensions = sizeOf(file.path);
+            const tags: string[] = req.body.tags;
 
-            // Save the wallpaper to the database
-            await new Wallpaper({
-                owner: (req.user as IUser)._id,
-                title: title,
-                imagePath: file.path,
-                mimeType: file.mimetype,
-                width: dimensions.width,
-                height: dimensions.height,
-            })
-                .save()
-                .then(newWallpaper => {
-                    // Add the newly created wallpaper's reference to the owner's 
-                    // model as well.
-                    return User.findOneAndUpdate(
-                        { _id: (req.user as IUser)._id }, // Find the owner
-                        { $push: { postedWallpapers: newWallpaper._id } }, // Push new wallpaper
-                        { useFindAndModify: false } // options
-                    );
-                })
-                .then(() => {
-                    res.status(201).json({ message: "Wallpaper uploaded successfully." });
-                })
-                .catch(err => {
-                    // If wallpaper cannot be added to the database for some reason,
-                    // delete the uploaded file from the filesystem to prevent piling
-                    // up of useless image files.
-                    res.status(500).json({ message: "Something went wrong." });
-                    console.error("There was an error while uploading the wallpaper:\n", err);
-                    unlink(file.path)
-                        .then(() => console.log("Uploaded file deleted because something went wrong."))
-                        .catch(err => {
-                            console.error("Something went wrong while deleting the uploaded file:\n", err);
-                        });
-                });
+            if (!title || !tags) {
+                errStatusCode = 400;
+                errMessage = "Either the title or the tags are missing from the request.";
+                return;
+            }
+
+            // If either one or more tags in the tags array do not exist in the db,
+            // return an error.
+            const tagsExist = await confirmTagsExist(tags);
+            if (!tagsExist) {
+                errStatusCode = 409;
+                errMessage = "Either one or more of the tags provided do not exist.";
+                return;
+            }
+
+            try {
+                // Save the wallpaper to the database
+                const newWallpaper = await new Wallpaper({
+                    owner: (req.user as IUser)._id,
+                    title: title,
+                    imagePath: file.path,
+                    mimeType: file.mimetype,
+                    width: dimensions.width,
+                    height: dimensions.height,
+                    tags
+                }).save();
+
+                // Add the newly created wallpaper's reference to the owner's 
+                // document as well.
+                await User.findOneAndUpdate(
+                    { _id: (req.user as IUser)._id }, // Find the owner
+                    { $push: { postedWallpapers: newWallpaper._id } }, // Push new wallpaper
+                    { useFindAndModify: false } // options
+                );
+
+                // Add the newly created wallpaper's reference to all the selected tag documents.
+                await Tag.updateMany(
+                    { title: { $in: tags } }, // Find all tags where the title is in the given array
+                    { $push: { wallpapers: newWallpaper._id } }, // Push the reference of new wallpaper
+                    { useFindAndModify: false } // options
+                )
+            } catch (err) {
+                // If wallpaper cannot be added to the database for some reason,
+                // delete the uploaded file from the filesystem to prevent piling
+                // up of useless image files.
+                console.error("There was an error while uploading the wallpaper:\n", err);
+
+                unlink(file.path)
+                    .then(() => console.log("Uploaded file deleted because something went wrong."))
+                    .catch(err => {
+                        console.error("Something went wrong while deleting the uploaded file:\n", err);
+                    });
+
+                errStatusCode = 500;
+                errMessage = "Something went wrong.";
+            }
         }
     });
+
+    if (errStatusCode && errMessage) {
+        return res.status(errStatusCode).json({ message: errMessage });
+    }
+
+    return res.status(201).json({ message: "Wallpaper uploaded successfully." });
 }
 
 export const deleteWallpapers = async (req: Request, res: Response) => {
     const wallpaperIds: string[] = req.body.ids;
+    let errStatusCode: number | undefined;
+    let errMessage: string | undefined;
 
     // If req.body.ids is empty or undefined, return bad request error.
     if (!wallpaperIds) {
@@ -146,9 +183,6 @@ export const deleteWallpapers = async (req: Request, res: Response) => {
 
     // Confirm that all of the wallpapers in the array are "owned" by the logged in user.
     const isOwner = await confirmOwnership(wallpaperIds, (req.user as IUser)._id);
-    let errStatusCode: number | undefined;
-    let errMessage: string | undefined;
-
     if (!isOwner) {
         return res.status(403).json({ message: "You cannot delete a wallpaper you did not post." });
     }
@@ -156,33 +190,43 @@ export const deleteWallpapers = async (req: Request, res: Response) => {
     // Delete each wallpaper from array and then
     // also delete them from the postedWallpapers array in user model.
     for (let wallpaperId of wallpaperIds) {
-        await Wallpaper.findByIdAndDelete(wallpaperId)
-            .then(deletedWallpaper => {
-                // Delete the file from filesystem
-                if (deletedWallpaper) {
-                    unlink(deletedWallpaper.imagePath)
-                        .catch(err => {
-                            console.error("Something went wrong while deleting the wallpaper from fs:\n", err);
-                        });
+        try {
+            const deletedWallpaper = await Wallpaper.findByIdAndDelete(wallpaperId);
 
-                    return User.updateOne(
-                        { _id: (req.user as IUser)._id },
-                        { $pull: { postedWallpapers: deletedWallpaper?._id } }
-                    )
-                } else {
-                    errStatusCode = 404;
-                    errMessage = "Wallpaper with the given id not found and could not be deleted.";
-                }
-            })
-            .catch(err => {
-                console.error("There was an error while deleting the wallpapers:\n", err);
-                errStatusCode = 500;
-                errMessage = "Something went wrong";
-            });
+            if (deletedWallpaper) {
+                // Delete the file from filesystem
+                await unlink(deletedWallpaper.imagePath)
+                    .catch(err => {
+                        console.error("Something went wrong while deleting the wallpaper from fs:\n", err);
+                    });
+
+                // Delete the file from the owner's document
+                await User.updateOne(
+                    { _id: (req.user as IUser)._id },
+                    { $pull: { postedWallpapers: deletedWallpaper?._id } }
+                )
+
+                // Delete the file from all the tags it was associated with
+                await Tag.updateMany(
+                    { title: { $in: deletedWallpaper.tags } }, // Find all the tags that this wallpaper had
+                    { $pull: { wallpapers: deletedWallpaper._id } }, // Delete the wallpaper's reference from them
+                    { useFindAndModify: false } // options
+                )
+            } else {
+                errStatusCode = 404;
+                errMessage = "Wallpaper with the given id not found and could not be deleted.";
+            }
+        } catch (err) {
+            console.error("There was an error while deleting the wallpapers:\n", err);
+            errStatusCode = 500;
+            errMessage = "Something went wrong";
+        }
     }
+
     if (errStatusCode && errMessage) {
         return res.status(errStatusCode).json({ message: errMessage });
     }
+
     return res.status(200).json({ message: "Wallpaper(s) deleted successfully" });
 }
 
@@ -231,5 +275,22 @@ async function confirmOwnership(wallpaperIds: string[], userId: string) {
     }
     // If all of the above wallpapers have the same owner as userId,
     // return true
+    return true;
+}
+
+/**
+ * Takes an array of tag titles and confirms that all of those tags
+ * exist in the database.
+ *
+ * @param {ITag[]} tags
+ * @return {*}  {boolean}
+ */
+async function confirmTagsExist(tags: string[]) {
+    for (let tag of tags) {
+        // If even a single tag doesn't exist in the database, return false.
+        if (!await Tag.exists({ title: tag })) {
+            return false;
+        }
+    }
     return true;
 }

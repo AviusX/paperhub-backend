@@ -7,7 +7,7 @@ interface IWallpaper extends Document {
     mimeType: string;
     width: number;
     height: number;
-    tags?: Types.ObjectId[];
+    tags?: string[];
     downloadCount?: number;
 }
 

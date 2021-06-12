@@ -45,7 +45,7 @@ export const getWallpaper = async (req: Request, res: Response) => {
             if (wallpaper) {
                 wallpaperPath = wallpaper.imagePath;
                 wallpaperName = wallpaper.title + "." + wallpaper.mimeType
-                    .substring("image/".length);
+                    .substring("image/".length); // Get the file extension from mime type.
                 return wallpaper._id;
             } else {
                 errStatusCode = 400;

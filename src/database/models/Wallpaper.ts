@@ -8,7 +8,7 @@ const wallpaperSchema = new Schema({
     mimeType: { type: String, requried: true },
     width: { type: Number, required: true },
     height: { type: Number, required: true },
-    tags: [Schema.Types.ObjectId],
+    tags: [String], // Store the denormalized tag titles only.
     downloadCount: { type: Number, default: 0 },
     postedAt: { type: Date, default: Date.now },
 });

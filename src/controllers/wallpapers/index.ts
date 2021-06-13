@@ -165,63 +165,55 @@ export const uploadWallpaper = (req: Request, res: Response) => {
     return res.status(201).json({ message: "Wallpaper uploaded successfully." });
 }
 
-export const deleteWallpapers = async (req: Request, res: Response) => {
-    const wallpaperIds: string[] = req.body.ids;
+export const deleteWallpaper = async (req: Request, res: Response) => {
+    const wallpaperId: string = req.params.id;
     let errStatusCode: number | undefined;
     let errMessage: string | undefined;
 
-    // If req.body.ids is empty or undefined, return bad request error.
-    if (!wallpaperIds) {
-        return res.status(400).json({ message: "The array of wallpaper ids was empty/undefined" });
-    }
+    // Confirm that the wallpaper is "owned" by the logged in user.
+    const isOwner = await confirmOwnership(wallpaperId, (req.user as IUser)._id);
 
-    // Confirm that all of the wallpapers in the array are "owned" by the logged in user.
-    const isOwner = await confirmOwnership(wallpaperIds, (req.user as IUser)._id);
     if (!isOwner) {
         return res.status(403).json({ message: "You cannot delete a wallpaper you did not post." });
     }
 
-    // Delete each wallpaper from array and then
-    // also delete them from the postedWallpapers array in user model.
-    for (let wallpaperId of wallpaperIds) {
-        try {
-            const deletedWallpaper = await Wallpaper.findByIdAndDelete(wallpaperId);
+    try {
+        const deletedWallpaper = await Wallpaper.findByIdAndDelete(wallpaperId);
 
-            if (deletedWallpaper) {
-                // Delete the file from filesystem
-                await unlink(deletedWallpaper.imagePath)
-                    .catch(err => {
-                        console.error("Something went wrong while deleting the wallpaper from fs:\n", err);
-                    });
+        if (deletedWallpaper) {
+            // Delete the file from filesystem
+            await unlink(deletedWallpaper.imagePath)
+                .catch(err => {
+                    console.error("Something went wrong while deleting the wallpaper from fs:\n", err);
+                });
 
-                // Delete the file from the owner's document
-                await User.updateOne(
-                    { _id: (req.user as IUser)._id },
-                    { $pull: { postedWallpapers: deletedWallpaper?._id } }
-                )
+            // Delete the file from the owner's document
+            await User.updateOne(
+                { _id: (req.user as IUser)._id },
+                { $pull: { postedWallpapers: deletedWallpaper?._id } }
+            )
 
-                // Delete the file from all the tags it was associated with
-                await Tag.updateMany(
-                    { title: { $in: deletedWallpaper.tags } }, // Find all the tags that this wallpaper had
-                    { $pull: { wallpapers: deletedWallpaper._id } }, // Delete the wallpaper's reference from them
-                    { useFindAndModify: false } // options
-                )
-            } else {
-                errStatusCode = 404;
-                errMessage = "Wallpaper with the given id not found and could not be deleted.";
-            }
-        } catch (err) {
-            console.error("There was an error while deleting the wallpapers:\n", err);
-            errStatusCode = 500;
-            errMessage = "Something went wrong";
+            // Delete the file from all the tags it was associated with
+            await Tag.updateMany(
+                { title: { $in: deletedWallpaper.tags } }, // Find all the tags that this wallpaper had
+                { $pull: { wallpapers: deletedWallpaper._id } }, // Delete the wallpaper's reference from them
+                { useFindAndModify: false } // options
+            )
+        } else {
+            errStatusCode = 404;
+            errMessage = "Wallpaper not found and could not be deleted.";
         }
+    } catch (err) {
+        console.error("There was an error while deleting the wallpapers:\n", err);
+        errStatusCode = 500;
+        errMessage = "Something went wrong.";
     }
 
     if (errStatusCode && errMessage) {
         return res.status(errStatusCode).json({ message: errMessage });
     }
 
-    return res.status(200).json({ message: "Wallpaper(s) deleted successfully" });
+    return res.status(200).json({ message: "Wallpaper deleted successfully." });
 }
 
 // Custom functions ===========================================
@@ -245,30 +237,28 @@ function fileFilter(_req: Request, file: Express.Multer.File, cb: FileFilterCall
 }
 
 /**
- * Takes an array of wallpaper ids and a user id
- * and confirms that the given user owns all of those wallpapers
+ * Takes a wallpaper id and a user id
+ * and confirms that the given user owns the given wallpaper.
  *
- * @param {string[]} wallpaperIds The array of wallpaper ids
+ * @param {string[]} wallpaperId The array of wallpaper ids
  * @param {string} userId The user id that we wish to confirm as the owner
  */
-async function confirmOwnership(wallpaperIds: string[], userId: string) {
+async function confirmOwnership(wallpaperId: string, userId: string) {
     // If for any id in array, the user id does not match the owner,
     // return false
-    for (let id of wallpaperIds) {
-        await Wallpaper.findById(id)
-            .then(wallpaper => {
-                if (!wallpaper?.owner.equals(userId)) {
-                    return false
-                }
-            })
-            .catch(err => {
-                // If anything goes wrong, return false and log error.
-                console.error("Something went wrong in confirmOwnership(wallpaperIds, userId):\n", err);
-                return false;
-            });
-    }
-    // If all of the above wallpapers have the same owner as userId,
-    // return true
+    await Wallpaper.findById(wallpaperId)
+        .then(wallpaper => {
+            if (!wallpaper?.owner.equals(userId)) {
+                return false
+            }
+        })
+        .catch(err => {
+            // If anything goes wrong, return false and log error.
+            console.error("Something went wrong in confirmOwnership(wallpaperIds, userId):\n", err);
+            return false;
+        });
+
+    // If the user owns the wallpaper, return true.
     return true;
 }
 

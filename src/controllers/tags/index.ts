@@ -4,6 +4,29 @@ import { PermissionLevel } from '../../enums/PermissionLevel';
 import Tag from '../../database/models/Tag';
 import ITag from '../../database/interfaces/ITag';
 
+export const getTags = async (req: Request, res: Response) => {
+    let errStatusCode: number | undefined;
+    let errMessage: string | undefined;
+
+    const tags: ITag[] = await Tag.find()
+        .catch((err: any) => {
+            console.error("There was an error while fetching tags:\n", err);
+            errStatusCode = 500;
+            errMessage = "Something went wrong.";
+        });
+    const tagTitles = [];
+
+    for (let tag of tags) {
+        tagTitles.push(tag.title);
+    }
+
+    if (errStatusCode && errMessage) {
+        return res.status(errStatusCode).json({ message: errMessage });
+    }
+
+    return res.status(200).json(tagTitles);
+}
+
 export const getTag = async (req: Request, res: Response) => {
     const title = req.params.title;
 

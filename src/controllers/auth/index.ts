@@ -15,7 +15,8 @@ export const checkAuthenticated = (req: Request, res: Response) => {
         res.status(200).json({
             discordId: (req.user as IUser).discordId,
             username: (req.user as IUser).username,
-            discriminator: (req.user as IUser).discriminator
+            discriminator: (req.user as IUser).discriminator,
+            permissionLevel: (req.user as IUser).permissionLevel
         });
     }
     else {

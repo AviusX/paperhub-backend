@@ -7,6 +7,7 @@ import ITag from '../../database/interfaces/ITag';
 export const getTags = async (req: Request, res: Response) => {
     let errStatusCode: number | undefined;
     let errMessage: string | undefined;
+    const tagTitles = [];
 
     const tags: ITag[] = await Tag.find()
         .catch((err: any) => {
@@ -14,7 +15,6 @@ export const getTags = async (req: Request, res: Response) => {
             errStatusCode = 500;
             errMessage = "Something went wrong.";
         });
-    const tagTitles = [];
 
     for (let tag of tags) {
         tagTitles.push(tag.title);

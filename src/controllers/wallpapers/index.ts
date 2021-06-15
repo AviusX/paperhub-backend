@@ -7,6 +7,7 @@ import path from 'path';
 import multer, { MulterError, FileFilterCallback } from 'multer';
 import { unlink } from 'fs/promises';
 import sizeOf from 'image-size';
+import { promisify } from 'util';
 
 // Good StackOverflow answer for fileFilter-
 // https://stackoverflow.com/a/65378054/10509081
@@ -18,6 +19,9 @@ const upload = multer({
     },
     fileFilter
 }).single('wallpaper');
+
+const promisifiedUpload = promisify(upload);
+
 
 export const getAllWallpapers = async (req: Request, res: Response) => {
     await Wallpaper.find()
@@ -73,93 +77,82 @@ export const getWallpaper = async (req: Request, res: Response) => {
     return res.status(200).download(wallpaperPath, wallpaperName);
 }
 
-export const uploadWallpaper = (req: Request, res: Response) => {
-    let errStatusCode: number | undefined;
-    let errMessage: string | undefined;
+export const uploadWallpaper = async (req: Request, res: Response) => {
+    try {
+        await promisifiedUpload(req, res);
 
-    upload(req, res, async function (err: any) {
+        const file = req.file as Express.Multer.File;
+
+        if (!file) {
+            return res.status(400).json({ message: "The file is missing from the request." });
+        }
+
+        const title = req.body.title;
+        const dimensions = sizeOf(file.path);
+        const tags = JSON.parse(req.body.tags);
+
+        if (!title || !tags) {
+            await deleteFile(file.path);
+            return res.status(400).json({ message: "Either the title or the tags are missing from the request." });
+        }
+
+        // If either one or more tags in the tags array do not exist in the db,
+        // return an error.
+        const tagsExist = await confirmTagsExist(tags);
+
+        if (!tagsExist) {
+            await deleteFile(file.path);
+            return res.status(409).json({ message: "Either one or more of the tags provided do not exist." });
+        }
+
+        try {
+            // Save the wallpaper to the database
+            const newWallpaper = await new Wallpaper({
+                owner: (req.user as IUser)._id,
+                title: title,
+                imagePath: file.path,
+                mimeType: file.mimetype,
+                width: dimensions.width,
+                height: dimensions.height,
+                tags
+            }).save();
+
+            // Add the newly created wallpaper's reference to the owner's 
+            // document as well.
+            await User.findOneAndUpdate(
+                { _id: (req.user as IUser)._id }, // Find the owner
+                { $push: { postedWallpapers: newWallpaper._id } }, // Push new wallpaper
+                { useFindAndModify: false } // options
+            );
+
+            // Add the newly created wallpaper's reference to all the selected tag documents.
+            await Tag.updateMany(
+                { title: { $in: tags } }, // Find all tags where the title is in the given array
+                { $push: { wallpapers: newWallpaper._id } }, // Push the reference of new wallpaper
+                { useFindAndModify: false } // options
+            )
+        } catch (err) {
+            // If wallpaper cannot be added to the database for some reason,
+            // delete the uploaded file from the filesystem to prevent piling
+            // up of useless image files.
+            console.error("There was an error while uploading the wallpaper:\n", err);
+            await deleteFile(file.path);
+
+            return res.status(500).json({ message: "Something went wrong." });
+        }
+
+    } catch (err) {
+
         if (err instanceof MulterError && err.code === "LIMIT_FILE_SIZE") {
             // If image size is bigger than the limit, send error response.
 
-            errStatusCode = 413;
-            errMessage = "Image size should not be bigger than 30 MB.";
-            return;
-        } else if (err) {
+            return res.status(413).json({ message: "Image size should not be bigger than 30 MB." });
+        } else {
             // If file is not an image, send error response.
             // This err is set by the fileFilter function.
 
-            errStatusCode = 415;
-            errMessage = err.message;
-            return;
-        } else {
-            // Otherwise, proceed with adding stuff to database.
-
-            const file = req.file as Express.Multer.File;
-            const title = req.body.title;
-            const dimensions = sizeOf(file.path);
-            const tags: string[] = req.body.tags;
-
-            if (!title || !tags) {
-                errStatusCode = 400;
-                errMessage = "Either the title or the tags are missing from the request.";
-                return;
-            }
-
-            // If either one or more tags in the tags array do not exist in the db,
-            // return an error.
-            const tagsExist = await confirmTagsExist(tags);
-            if (!tagsExist) {
-                errStatusCode = 409;
-                errMessage = "Either one or more of the tags provided do not exist.";
-                return;
-            }
-
-            try {
-                // Save the wallpaper to the database
-                const newWallpaper = await new Wallpaper({
-                    owner: (req.user as IUser)._id,
-                    title: title,
-                    imagePath: file.path,
-                    mimeType: file.mimetype,
-                    width: dimensions.width,
-                    height: dimensions.height,
-                    tags
-                }).save();
-
-                // Add the newly created wallpaper's reference to the owner's 
-                // document as well.
-                await User.findOneAndUpdate(
-                    { _id: (req.user as IUser)._id }, // Find the owner
-                    { $push: { postedWallpapers: newWallpaper._id } }, // Push new wallpaper
-                    { useFindAndModify: false } // options
-                );
-
-                // Add the newly created wallpaper's reference to all the selected tag documents.
-                await Tag.updateMany(
-                    { title: { $in: tags } }, // Find all tags where the title is in the given array
-                    { $push: { wallpapers: newWallpaper._id } }, // Push the reference of new wallpaper
-                    { useFindAndModify: false } // options
-                )
-            } catch (err) {
-                // If wallpaper cannot be added to the database for some reason,
-                // delete the uploaded file from the filesystem to prevent piling
-                // up of useless image files.
-                console.error("There was an error while uploading the wallpaper:\n", err);
-
-                unlink(file.path)
-                    .then(() => console.log("Uploaded file deleted because something went wrong."))
-                    .catch(err => {
-                        console.error("Something went wrong while deleting the uploaded file:\n", err);
-                    });
-
-                errStatusCode = 500;
-                errMessage = "Something went wrong.";
-            }
+            return res.status(415).json({ message: err.message });
         }
-    });
-
-    if (errStatusCode && errMessage) {
-        return res.status(errStatusCode).json({ message: errMessage });
     }
 
     return res.status(201).json({ message: "Wallpaper uploaded successfully." });
@@ -182,10 +175,7 @@ export const deleteWallpaper = async (req: Request, res: Response) => {
 
         if (deletedWallpaper) {
             // Delete the file from filesystem
-            await unlink(deletedWallpaper.imagePath)
-                .catch(err => {
-                    console.error("Something went wrong while deleting the wallpaper from fs:\n", err);
-                });
+            await deleteFile(deletedWallpaper.imagePath);
 
             // Delete the file from the owner's document
             await User.updateOne(
@@ -277,4 +267,17 @@ async function confirmTagsExist(tags: string[]) {
         }
     }
     return true;
+}
+
+/**
+ * Takes a file path as an argument and delets that file from
+ * the filesystem.
+ *
+ * @param {Express.Multer.File} file
+ */
+function deleteFile(filePath: string) {
+    return unlink(filePath)
+        .catch(err => {
+            console.error("Something went wrong while deleting the file:\n", err);
+        });
 }

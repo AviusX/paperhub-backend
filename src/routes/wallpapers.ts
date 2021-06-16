@@ -1,5 +1,5 @@
 import isLoggedIn from '../middleware/isLoggedIn';
-import { getAllWallpapers, getWallpaper, uploadWallpaper, deleteWallpaper } from '../controllers/wallpapers/index';
+import { getAllWallpapers, getWallpaper, uploadWallpaper, deleteWallpaper } from '../controllers/wallpapers';
 import express from 'express';
 
 const router = express.Router();

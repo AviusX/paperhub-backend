@@ -7,6 +7,7 @@ import sessions from 'client-sessions';
 import config from '../config';
 import User from './database/models/User';
 import authRoutes from './routes/auth';
+import userRoutes from './routes/users';
 import wallpaperRoutes from './routes/wallpapers';
 import tagRoutes from './routes/tags';
 
@@ -81,6 +82,7 @@ passport.use(new DiscordStrategy({
 
 // Routes =====================================================
 app.use('/auth', authRoutes);
+app.use('/users', userRoutes);
 app.use('/wallpapers', wallpaperRoutes);
 app.use('/tags', tagRoutes);
 

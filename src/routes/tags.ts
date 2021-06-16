@@ -1,6 +1,6 @@
 import express from 'express';
 import isLoggedIn from '../middleware/isLoggedIn';
-import { getTags, getTag, createTag } from '../controllers/tags/index';
+import { getTags, getTag, createTag } from '../controllers/tags';
 
 const router = express.Router();
 

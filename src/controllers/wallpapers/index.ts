@@ -29,7 +29,7 @@ export const getAllWallpapers = async (req: Request, res: Response) => {
     let sortBy;
     let sortDirection;
 
-    // Set sort by. Default is postedAt.
+    // Set sort by. Default is postedAt / most recent.
     if (req.query.sortBy === SortBy.MostDownloaded) {
         sortBy = "downloadCount";
     } else if (req.query.sortBy === SortBy.MostRecent) {
@@ -40,11 +40,11 @@ export const getAllWallpapers = async (req: Request, res: Response) => {
 
     // Set sort direction (asc or desc). Default is asc.
     if (req.query.sortDirection === SortDirection.Ascending) {
-        sortDirection = "";
-    } else if (req.query.sortDirection === SortDirection.Descending) {
         sortDirection = "-";
+    } else if (req.query.sortDirection === SortDirection.Descending) {
+        sortDirection = "";
     } else {
-        sortDirection = ""
+        sortDirection = "-"
     }
 
     await Wallpaper.find()

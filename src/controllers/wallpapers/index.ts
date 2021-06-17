@@ -1,6 +1,8 @@
 import User from '../../database/models/User';
 import Wallpaper from '../../database/models/Wallpaper';
 import Tag from '../../database/models/Tag';
+import { SortBy } from '../../enums/SortBy';
+import { SortDirection } from '../../enums/SortDirection';
 import IUser from '../../database/interfaces/IUser';
 import { Request, Response } from 'express';
 import path from 'path';
@@ -24,7 +26,29 @@ const promisifiedUpload = promisify(upload);
 
 
 export const getAllWallpapers = async (req: Request, res: Response) => {
+    let sortBy;
+    let sortDirection;
+
+    // Set sort by. Default is postedAt.
+    if (req.query.sortBy === SortBy.MostDownloaded) {
+        sortBy = "downloadCount";
+    } else if (req.query.sortBy === SortBy.MostRecent) {
+        sortBy = "postedAt";
+    } else {
+        sortBy = "postedAt";
+    }
+
+    // Set sort direction (asc or desc). Default is asc.
+    if (req.query.sortDirection === SortDirection.Ascending) {
+        sortDirection = "";
+    } else if (req.query.sortDirection === SortDirection.Descending) {
+        sortDirection = "-";
+    } else {
+        sortDirection = ""
+    }
+
     await Wallpaper.find()
+        .sort(`${sortDirection}${sortBy}`)
         .then(wallpapers => {
             res.status(200).json(wallpapers);
         })

@@ -39,7 +39,7 @@ export const getAllWallpapers = async (req: Request, res: Response) => {
     }
     // Pagination variables
     const limit = parseInt(req.query.limit as string) || 10;
-    const page = parseInt(req.query.page as string) - 1 || 0;
+    const page = parseInt(req.query.page as string) || 0;
     const pageCount = countPages(documentCount, limit);
 
     if (limit <= 0 || page < 0) {

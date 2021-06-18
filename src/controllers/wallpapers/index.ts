@@ -26,8 +26,25 @@ const promisifiedUpload = promisify(upload);
 
 
 export const getAllWallpapers = async (req: Request, res: Response) => {
+    // Sorting variables
     let sortBy;
     let sortDirection;
+
+    let documentCount;
+    try {
+        documentCount = await Wallpaper.estimatedDocumentCount();
+    } catch (err) {
+        console.error("Something went wrong while counting number of wallpapers:\n", err);
+        return res.status(500).json({ message: "Something went wrong." });
+    }
+    // Pagination variables
+    const limit = parseInt(req.query.limit as string) || 10;
+    const page = parseInt(req.query.page as string) - 1 || 0;
+    const pageCount = countPages(documentCount, limit);
+
+    if (limit <= 0 || page < 0) {
+        return res.status(400).json({ message: "Page number and limit must be positive numbers." });
+    }
 
     // Set sort by. Default is postedAt / most recent.
     if (req.query.sortBy === SortBy.MostDownloaded) {
@@ -47,10 +64,12 @@ export const getAllWallpapers = async (req: Request, res: Response) => {
         sortDirection = "-"
     }
 
-    await Wallpaper.find()
+    Wallpaper.find()
         .sort(`${sortDirection}${sortBy}`)
+        .limit(limit)
+        .skip(page * limit)
         .then(wallpapers => {
-            res.status(200).json(wallpapers);
+            res.status(200).json({ wallpapers, pageCount });
         })
         .catch(err => {
             console.error("There was an error while fetching wallpapers", err);
@@ -231,6 +250,18 @@ export const deleteWallpaper = async (req: Request, res: Response) => {
 }
 
 // Custom functions ===========================================
+
+/**
+ * Takes the total number of documents and the number of documents
+ * to show per page (limit) and returns the number of pages.
+ *
+ * @param {number} documentCount
+ * @param {number} limit
+ * @return {*} 
+ */
+function countPages(documentCount: number, limit: number) {
+    return (Math.ceil(documentCount / limit))
+}
 
 /**
  * Determines which file should be saved and which file should not be saved

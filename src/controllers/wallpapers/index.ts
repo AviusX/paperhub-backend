@@ -10,6 +10,7 @@ import multer, { MulterError, FileFilterCallback } from 'multer';
 import { unlink } from 'fs/promises';
 import sizeOf from 'image-size';
 import { promisify } from 'util';
+import IWallpaper from '../../database/interfaces/IWallpaper';
 
 // Good StackOverflow answer for fileFilter-
 // https://stackoverflow.com/a/65378054/10509081
@@ -30,22 +31,6 @@ export const getAllWallpapers = async (req: Request, res: Response) => {
     let sortBy;
     let sortDirection;
 
-    let documentCount;
-    try {
-        documentCount = await Wallpaper.estimatedDocumentCount();
-    } catch (err) {
-        console.error("Something went wrong while counting number of wallpapers:\n", err);
-        return res.status(500).json({ message: "Something went wrong." });
-    }
-    // Pagination variables
-    const limit = parseInt(req.query.limit as string) || 10;
-    const page = parseInt(req.query.page as string) || 0;
-    const pageCount = countPages(documentCount, limit);
-
-    if (limit <= 0 || page < 0) {
-        return res.status(400).json({ message: "Page number and limit must be positive numbers." });
-    }
-
     // Set sort by. Default is postedAt / most recent.
     if (req.query.sortBy === SortBy.MostDownloaded) {
         sortBy = "downloadCount";
@@ -53,6 +38,23 @@ export const getAllWallpapers = async (req: Request, res: Response) => {
         sortBy = "postedAt";
     } else {
         sortBy = "postedAt";
+    }
+
+    let documentCount;
+    try {
+        documentCount = await Wallpaper.estimatedDocumentCount();
+    } catch (err) {
+        console.error("Something went wrong while counting number of wallpapers:\n", err);
+        return res.status(500).json({ message: "Something went wrong." });
+    }
+
+    // Pagination variables
+    const limit = parseInt(req.query.limit as string) || 10;
+    const page = parseInt(req.query.page as string) || 0;
+    const pageCount = countPages(documentCount, limit);
+
+    if (limit <= 0 || page < 0) {
+        return res.status(400).json({ message: "Page number and limit must be positive numbers." });
     }
 
     // Set sort direction (asc or desc). Default is asc.
@@ -118,6 +120,88 @@ export const getWallpaper = async (req: Request, res: Response) => {
     // by resolving a path using the path of this file.
     wallpaperPath = path.resolve(__dirname + '../../../../') + '/' + wallpaperPath
     return res.status(200).download(wallpaperPath, wallpaperName);
+}
+
+export const searchWallpapers = async (req: Request, res: Response) => {
+    const searchQuery = req.query.query as string || "";
+    const searchRegex = new RegExp(searchQuery, "i");
+
+    let wallpapers: IWallpaper[];
+    let documentCount;
+    let pageCount;
+
+    // Sorting variables
+    let sortBy;
+    let sortDirection;
+
+    // Pagination variables
+    const limit = parseInt(req.query.limit as string) || 10;
+    const page = parseInt(req.query.page as string) || 0;
+
+    // Sorting =================================================
+
+    // Set sort by. Default is postedAt / most recent.
+    if (req.query.sortBy === SortBy.MostDownloaded) {
+        sortBy = "downloadCount";
+    } else if (req.query.sortBy === SortBy.MostRecent) {
+        sortBy = "postedAt";
+    } else {
+        sortBy = "postedAt";
+    }
+
+    // Set sort direction (asc or desc). Default is asc.
+    if (req.query.sortDirection === SortDirection.Ascending) {
+        sortDirection = "-";
+    } else if (req.query.sortDirection === SortDirection.Descending) {
+        sortDirection = "";
+    } else {
+        sortDirection = "-"
+    }
+
+    // Pagination ==============================================
+
+    if (limit <= 0 || page < 0) {
+        return res.status(400).json({ message: "Page number and limit must be positive numbers." });
+    }
+
+    // Database operations =====================================
+
+    // The DB query used to find the wallpapers and count documents.
+    const dbQuery = {
+        // If either the title or any tag in the tags array includes
+        // the search string, add it to the response array.
+        $or: [{
+            title: { $regex: searchRegex }
+        }, {
+            // The $elemMatch operator matches documents that contain an array field with 
+            // at least one element that matches all the specified query criteria.
+            tags: { $elemMatch: { $regex: searchRegex } }
+        }]
+    };
+
+    // Get the wallpapers and the page count.
+    try {
+        wallpapers = await Wallpaper.find(dbQuery)
+            .sort(`${sortDirection}${sortBy}`)
+            .limit(limit)
+            .skip(page * limit);
+
+        documentCount = await Wallpaper.countDocuments(dbQuery);
+        pageCount = countPages(documentCount, limit);
+    } catch (err) {
+        console.error("Something went wrong while searching for wallpapers:\n", err);
+        return res.status(500).json({ message: "Something went wrong." });
+    }
+
+    // Return result in response ===============================
+
+    // If no wallpapers were found matching the search query, return 404.
+    if (!wallpapers || wallpapers.length === 0) {
+        return res.status(404).json({ message: "No wallpapers found." });
+    }
+
+    // Return the array of matching wallpapers and pageCount.
+    return res.status(200).json({ wallpapers, pageCount });
 }
 
 export const uploadWallpaper = async (req: Request, res: Response) => {

@@ -86,34 +86,25 @@ export const getWallpaper = async (req: Request, res: Response) => {
     let wallpaperPath: string = "";
     let wallpaperName: string = "";
 
-    // Assigned if anything goes wrong with db operations.
-    let errStatusCode: number | undefined;
-    let errMessage: string | undefined;
+    try {
+        const foundWallpaper = await Wallpaper.findById(wallpaperId)
 
-    const foundWallpaper = await Wallpaper.findById(wallpaperId)
+        if (foundWallpaper) {
+            wallpaperPath = foundWallpaper.imagePath;
+            wallpaperName = foundWallpaper.title + "." + foundWallpaper.mimeType
+                .substring("image/".length); // Get the file extension from mime type.
 
-    if (foundWallpaper) {
-        wallpaperPath = foundWallpaper.imagePath;
-        wallpaperName = foundWallpaper.title + "." + foundWallpaper.mimeType
-            .substring("image/".length); // Get the file extension from mime type.
-
-        await Wallpaper.findOneAndUpdate(
-            { _id: wallpaperId }, // Search for this wallpaper.
-            { $inc: { downloadCount: 1 } }, // Increment the download count.
-            { useFindAndModify: false } // options
-        ).catch(err => {
-            console.error("Something went wrong while fetching the wallpaper.", err);
-            errStatusCode = 500;
-            errMessage = "Something went wrong.";
-        })
-    } else {
-        errStatusCode = 400;
-        errMessage = "Wallpaper not found.";
-    }
-
-    // If anything goes wrong, send the assigned error message & status code.
-    if (errStatusCode && errMessage) {
-        return res.status(errStatusCode).json({ message: errMessage });
+            await Wallpaper.findOneAndUpdate(
+                { _id: wallpaperId }, // Search for this wallpaper.
+                { $inc: { downloadCount: 1 } }, // Increment the download count.
+                { useFindAndModify: false } // options
+            );
+        } else {
+            return res.status(400).json({ message: "Wallpaper not found." });
+        }
+    } catch (err) {
+        console.error("Something went wrong while fetching the wallpaper.", err);
+        return res.status(500).json({ message: "Something went wrong." });
     }
 
     // Get the path of uploads directory (which is supposed to be in project root)

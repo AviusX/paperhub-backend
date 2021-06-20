@@ -11,6 +11,7 @@ import { unlink } from 'fs/promises';
 import sizeOf from 'image-size';
 import { promisify } from 'util';
 import IWallpaper from '../../database/interfaces/IWallpaper';
+import { PermissionLevel } from '../../enums/PermissionLevel';
 
 // Good StackOverflow answer for fileFilter-
 // https://stackoverflow.com/a/65378054/10509081
@@ -196,6 +197,10 @@ export const searchWallpapers = async (req: Request, res: Response) => {
 }
 
 export const uploadWallpaper = async (req: Request, res: Response) => {
+    if ((req.user as IUser).permissionLevel < PermissionLevel.Moderator) {
+        return res.status(403).json({ message: "You do not have the permission to upload a wallpaper." });
+    }
+
     try {
         await promisifiedUpload(req, res);
 
@@ -278,14 +283,13 @@ export const uploadWallpaper = async (req: Request, res: Response) => {
 
 export const deleteWallpaper = async (req: Request, res: Response) => {
     const wallpaperId: string = req.params.id;
-    let errStatusCode: number | undefined;
-    let errMessage: string | undefined;
 
     // Confirm that the wallpaper is "owned" by the logged in user.
     const isOwner = await confirmOwnership(wallpaperId, (req.user as IUser)._id);
 
-    if (!isOwner) {
-        return res.status(403).json({ message: "You cannot delete a wallpaper you did not post." });
+    // If user is neither the owner of the wallpaper, nor an admin, reject delete request.
+    if (!isOwner && (req.user as IUser).permissionLevel < PermissionLevel.Admin) {
+        return res.status(403).json({ message: "You do not have the permission to delete this wallpaper." });
     }
 
     try {
@@ -308,17 +312,11 @@ export const deleteWallpaper = async (req: Request, res: Response) => {
                 { useFindAndModify: false } // options
             )
         } else {
-            errStatusCode = 404;
-            errMessage = "Wallpaper not found and could not be deleted.";
+            return res.status(404).json({ message: "Wallpaper not found and could not be deleted." });
         }
     } catch (err) {
         console.error("There was an error while deleting the wallpapers:\n", err);
-        errStatusCode = 500;
-        errMessage = "Something went wrong.";
-    }
-
-    if (errStatusCode && errMessage) {
-        return res.status(errStatusCode).json({ message: errMessage });
+        return res.status(500).json({ message: "Something went wrong." });
     }
 
     return res.status(200).json({ message: "Wallpaper deleted successfully." });

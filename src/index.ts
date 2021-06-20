@@ -10,6 +10,7 @@ import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import wallpaperRoutes from './routes/wallpapers';
 import tagRoutes from './routes/tags';
+import { PermissionLevel } from './enums/PermissionLevel';
 
 const DiscordStrategy = require('passport-discord').Strategy;
 
@@ -58,24 +59,49 @@ passport.use(new DiscordStrategy({
     callbackURL: '/auth/discord/callback',
     scope: ['identify', 'guilds']
 },
-    (accessToken: any, refreshToken: any, profile: any, cb: any) => {
-        // Only log user in if they are in the 150 percent server.
-        let userEligible = checkUserEligibility(profile.guilds);
-        if (userEligible) {
-            User.findOneAndUpdate({
-                discordId: profile.id
-            }, // query
-                {
+    async (accessToken: any, refreshToken: any, profile: any, cb: any) => {
+        // Check if a user is a member of 150 percent.
+        const isUserChad = checkUserChad(profile.guilds);
+
+        try {
+            const userExists = await User.exists({ discordId: profile.id });
+
+            if (userExists) {
+                // If user exists, just update their username and discriminator and log them in.
+
+                const user = await User.findOneAndUpdate({ discordId: profile.id },
+                    { username: profile.username, discriminator: profile.discriminator },
+                    { useFindAndModify: false }
+                );
+
+                return cb(null, user);
+            } else if (!userExists && isUserChad) {
+                // If user doesn't exist but is a member of 150 percent, make a new user
+                // with a permission level of Moderator and log them in.
+
+                const user = await User.create({
+                    discordId: profile.id,
+                    username: profile.username,
+                    discriminator: profile.discriminator,
+                    permissionLevel: PermissionLevel.Moderator
+                });
+
+                return cb(null, user);
+            } else {
+                // If user doesn't exist and is not a member of 150 percent, just make a new
+                // user with the default permission level of user and log them in.
+
+                const user = await User.create({
                     discordId: profile.id,
                     username: profile.username,
                     discriminator: profile.discriminator
-                }, // update
-                { upsert: true, useFindAndModify: false }, // options (upsert: true creates the object if it doesn't exist.)
-                function (err, user) { // callback
-                    return cb(err, user);
                 });
-        } else {
-            return cb();
+
+                return cb(null, user);
+            }
+        } catch (err) {
+            console.error("Something went wrong while logging the user in:\n", err);
+            return cb(err);
         }
     })
 );
@@ -101,7 +127,15 @@ mongoose.connect(config.mongo.url, config.mongo.options)
     })
 
 // Custom functions ===========================================
-function checkUserEligibility(guilds: any): boolean {
+/**
+ * Takes a list of guilds. Returns true if the guild id of 
+ * the private Discord server 150 percent exists in the list.
+ * Returns false otherwise.
+ *
+ * @param {*} guilds
+ * @return {*}  {boolean}
+ */
+function checkUserChad(guilds: any): boolean {
     let userEligible = false;
     guilds.forEach((guild: any) => {
         if (guild.id === '614918030870183963')

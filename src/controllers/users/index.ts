@@ -14,7 +14,6 @@ export const getUser = async (req: Request, res: Response) => {
             return res.status(200).json({
                 username: user.username,
                 discriminator: user.discriminator,
-                postedWallpapers: user.postedWallpapers
             });
         } else {
             return res.status(404).json({ message: "User not found." });

@@ -9,7 +9,14 @@ export const getUser = async (req: Request, res: Response) => {
     let user;
 
     try {
-        user = await User.findById(id);
+        // If the received id is 24 hex characters long, search using mongodb id,
+        // else, search using discordId;
+        if (id.length === 24) {
+            user = await User.findById(id);
+        } else {
+            user = await User.findOne({ discordId: id });
+        }
+
         if (user) {
             return res.status(200).json({
                 username: user.username,
@@ -26,6 +33,7 @@ export const getUser = async (req: Request, res: Response) => {
 
 export const getUserWallpapers = async (req: Request, res: Response) => {
     const id = req.params.id;
+    let user;
 
     // Sorting variables
     let sortBy;
@@ -62,7 +70,13 @@ export const getUserWallpapers = async (req: Request, res: Response) => {
 
     // DB Operations ===========================================
     try {
-        const user = await User.findById(id);
+        // If the received id is 24 hex characters long, search using mongodb id,
+        // else, search using discordId;
+        if (id.length === 24) {
+            user = await User.findById(id);
+        } else {
+            user = await User.findOne({ discordId: id });
+        }
 
         if (!user) {
             return res.status(404).json({ message: "User not found." });

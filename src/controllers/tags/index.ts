@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import IUser from '../../database/interfaces/IUser';
 import { PermissionLevel } from '../../enums/PermissionLevel';
 import Tag from '../../database/models/Tag';
+import { tagSchema } from '../../validation/tag';
 import ITag from '../../database/interfaces/ITag';
 
 export const getTags = async (req: Request, res: Response) => {
@@ -52,6 +53,12 @@ export const getTag = async (req: Request, res: Response) => {
 export const createTag = async (req: Request, res: Response) => {
     const permissionLevel = (req.user as IUser).permissionLevel;
     const title = req.body.title;
+
+    const { error: validationError } = tagSchema.validate({ title });
+
+    if (validationError) {
+        return res.status(400).json({ message: validationError.message });
+    }
 
     // If the user does not have a PermissionLevel of Developer,
     // stop them from being able to add a tag.

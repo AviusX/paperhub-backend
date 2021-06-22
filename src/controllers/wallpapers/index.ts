@@ -11,6 +11,7 @@ import { unlink } from 'fs/promises';
 import sizeOf from 'image-size';
 import { promisify } from 'util';
 import IWallpaper from '../../database/interfaces/IWallpaper';
+import { wallpaperSchema } from '../../validation/wallpaper';
 import { PermissionLevel } from '../../enums/PermissionLevel';
 
 // Good StackOverflow answer for fileFilter-
@@ -212,11 +213,21 @@ export const uploadWallpaper = async (req: Request, res: Response) => {
 
         const title = req.body.title;
         const dimensions = sizeOf(file.path);
-        const tags = JSON.parse(req.body.tags);
+        let tags;
 
-        if (!title || !tags) {
+        try {
+            tags = JSON.parse(req.body.tags);
+        } catch (err) {
+            deleteFile(file.path);
+            console.error("Something went wrong while parsing tags:\n", err);
+            return res.status(400).json({ message: "Tags should contain a valid array." });
+        }
+
+        const { error: validationError } = wallpaperSchema.validate({ title, tags });
+
+        if (validationError) {
             await deleteFile(file.path);
-            return res.status(400).json({ message: "Either the title or the tags are missing from the request." });
+            return res.status(400).json({ message: validationError.message });
         }
 
         // If either one or more tags in the tags array do not exist in the db,
@@ -265,7 +276,6 @@ export const uploadWallpaper = async (req: Request, res: Response) => {
         }
 
     } catch (err) {
-
         if (err instanceof MulterError && err.code === "LIMIT_FILE_SIZE") {
             // If image size is bigger than the limit, send error response.
 

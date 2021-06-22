@@ -8,10 +8,12 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@types/joi": "^17.2.3",
     "client-sessions": "^0.8.0",
     "express": "^4.17.1",
     "helmet": "^4.6.0",
     "image-size": "^1.0.0",
+    "joi": "^17.4.0",
     "mongoose": "^5.12.12",
     "multer": "^1.4.2",
     "passport": "^0.4.1",

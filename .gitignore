@@ -1,5 +1,19 @@
+# Node Modules
 node_modules/
+
+# Static Files
 public/
+
+# Built client
 build/
+
+# Built server files
+config.js
+src/*.js
+src/**/*.js
+
+# Config files
 config.ts
+
+# Log files
 *.log

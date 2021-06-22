@@ -1,6 +1,6 @@
 export enum PermissionLevel {
     User = 1,
-    Moderator,
+    Creator,
     Admin,
     Developer
 }

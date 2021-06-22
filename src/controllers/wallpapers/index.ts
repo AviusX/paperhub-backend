@@ -197,7 +197,7 @@ export const searchWallpapers = async (req: Request, res: Response) => {
 }
 
 export const uploadWallpaper = async (req: Request, res: Response) => {
-    if ((req.user as IUser).permissionLevel < PermissionLevel.Moderator) {
+    if ((req.user as IUser).permissionLevel < PermissionLevel.Creator) {
         return res.status(403).json({ message: "You do not have the permission to upload a wallpaper." });
     }
 

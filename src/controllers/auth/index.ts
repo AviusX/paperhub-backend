@@ -13,6 +13,7 @@ export const checkAuthenticated = (req: Request, res: Response) => {
     // and that there is no data to send. Also clear session cookie.
     if (req.user) {
         res.status(200).json({
+            id: (req.user as IUser)._id,
             discordId: (req.user as IUser).discordId,
             username: (req.user as IUser).username,
             discriminator: (req.user as IUser).discriminator,

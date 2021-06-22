@@ -83,7 +83,7 @@ passport.use(new DiscordStrategy({
                     discordId: profile.id,
                     username: profile.username,
                     discriminator: profile.discriminator,
-                    permissionLevel: PermissionLevel.Moderator
+                    permissionLevel: PermissionLevel.Creator
                 });
 
                 return cb(null, user);

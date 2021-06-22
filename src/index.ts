@@ -29,7 +29,7 @@ app.use(sessions({
     cookie: {
         httpOnly: true, // Cookie is not accessible from javascript
         ephemeral: true, // Exit session when browser closes
-        secure: config.production // Only allow through SSL
+        secureProxy: config.production // Only allow through SSL
     }
 }));
 app.use(passport.initialize());

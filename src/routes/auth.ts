@@ -7,8 +7,8 @@ const router = express.Router();
 
 router.get('/discord', passport.authenticate('discord'));
 router.get('/discord/callback', passport.authenticate('discord', {
-    successRedirect: "http://localhost:3000",
-    failureRedirect: "http://localhost:3000"
+    successRedirect: "https://paperhub.aviusx.dev",
+    failureRedirect: "https://paperhub.aviusx.dev"
 }));
 router.get('/logout', isLoggedIn, logout);
 router.get('/check', checkAuthenticated);

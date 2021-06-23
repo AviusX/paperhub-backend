@@ -1,14 +1,15 @@
 import express from 'express';
 import passport from 'passport';
 import isLoggedIn from '../middleware/isLoggedIn';
+import config from '../../config';
 import { logout, checkAuthenticated } from '../controllers/auth';
 
 const router = express.Router();
 
 router.get('/discord', passport.authenticate('discord'));
 router.get('/discord/callback', passport.authenticate('discord', {
-    successRedirect: "https://paperhub.aviusx.dev",
-    failureRedirect: "https://paperhub.aviusx.dev"
+    successRedirect: config.CLIENT.url,
+    failureRedirect: config.CLIENT.url
 }));
 router.get('/logout', isLoggedIn, logout);
 router.get('/check', checkAuthenticated);

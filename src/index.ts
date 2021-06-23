@@ -23,13 +23,13 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
 app.use(sessions({
     cookieName: "session", // cookie name dictates the key name added to the request object
-    secret: config.sessions.secret, // should be a large unguessable string
+    secret: config.SESSIONS.secret, // should be a large unguessable string
     duration: 1000 * 60 * 60 * 24, // how long the session will stay valid in ms
     activeDuration: 1000 * 60 * 5, // if expiresIn < activeDuration, the session will be extended by activeDuration milliseconds
     cookie: {
         httpOnly: true, // Cookie is not accessible from javascript
         ephemeral: true, // Exit session when browser closes
-        secureProxy: config.production // Only allow through SSL
+        secureProxy: config.PRODUCTION // Only allow through SSL
     }
 }));
 app.use(passport.initialize());
@@ -54,9 +54,9 @@ passport.deserializeUser(function (id, done) {
 
 // Set up Passport Discord Strategy ===========================
 passport.use(new DiscordStrategy({
-    clientID: config.discordClient.id,
-    clientSecret: config.discordClient.secret,
-    callbackURL: '/auth/discord/callback',
+    clientID: config.DISCORD_CLIENT.id,
+    clientSecret: config.DISCORD_CLIENT.secret,
+    callbackURL: `${config.SERVER.url}/auth/discord/callback`,
     scope: ['identify', 'guilds']
 },
     async (accessToken: any, refreshToken: any, profile: any, cb: any) => {
@@ -118,11 +118,11 @@ app.get("/*", (_req: Request, res: Response) => {
 })
 
 // Connect to DB and start express server. ====================
-mongoose.connect(config.mongo.url, config.mongo.options)
+mongoose.connect(config.MONGO.url, config.MONGO.options)
     .then(() => {
         console.log("Connected to the database");
-        app.listen(config.port, () => {
-            console.log(`Server started on port ${config.port}`);
+        app.listen(config.SERVER.port, () => {
+            console.log(`Server started on port ${config.SERVER.port}`);
         });
     })
 

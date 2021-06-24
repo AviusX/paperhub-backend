@@ -1,18 +1,21 @@
+import IWallpaper from '../../database/interfaces/IWallpaper';
+import IUser from '../../database/interfaces/IUser';
 import User from '../../database/models/User';
 import Wallpaper from '../../database/models/Wallpaper';
 import Tag from '../../database/models/Tag';
+
 import { SortBy } from '../../enums/SortBy';
 import { SortDirection } from '../../enums/SortDirection';
-import IUser from '../../database/interfaces/IUser';
+import { PermissionLevel } from '../../enums/PermissionLevel';
+import { wallpaperSchema } from '../../validation/wallpaper';
+
 import { Request, Response } from 'express';
 import path from 'path';
 import multer, { MulterError, FileFilterCallback } from 'multer';
 import { unlink } from 'fs/promises';
 import sizeOf from 'image-size';
 import { promisify } from 'util';
-import IWallpaper from '../../database/interfaces/IWallpaper';
-import { wallpaperSchema } from '../../validation/wallpaper';
-import { PermissionLevel } from '../../enums/PermissionLevel';
+import sharp from 'sharp';
 
 // Good StackOverflow answer for fileFilter-
 // https://stackoverflow.com/a/65378054/10509081
@@ -79,6 +82,28 @@ export const getAllWallpapers = async (req: Request, res: Response) => {
             console.error("There was an error while fetching wallpapers", err);
             res.status(500).json({ message: "There was an error while fetching wallpapers." });
         });
+}
+
+export const getThumbnail = async (req: Request, res: Response) => {
+    const wallpaperId = req.params.id;
+
+    try {
+        const wallpaper = await Wallpaper.findById(wallpaperId);
+        if (wallpaper) {
+            const wallpaperPath = wallpaper.imagePath;
+            const thumbnail = await sharp(wallpaperPath)
+                .resize(600, 350, { fit: "contain", background: { r: 24, g: 5, b: 41 } })
+                .toFormat('jpeg')
+                .toBuffer();
+
+            return res.status(200).end(thumbnail);
+        } else {
+            return res.status(404).json({ message: "Wallpaper not found." });
+        }
+    } catch (err) {
+        console.error("Something went wrong while fetching wallpaper for thumbnail:\n", err);
+        return res.status(500).json({ message: "Something went wrong." });
+    }
 }
 
 export const getWallpaper = async (req: Request, res: Response) => {

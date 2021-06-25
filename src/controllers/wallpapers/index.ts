@@ -91,10 +91,22 @@ export const getThumbnail = async (req: Request, res: Response) => {
         const wallpaper = await Wallpaper.findById(wallpaperId);
         if (wallpaper) {
             const wallpaperPath = wallpaper.imagePath;
-            const thumbnail = await sharp(wallpaperPath)
-                .resize(600, 350, { fit: "contain", background: { r: 24, g: 5, b: 41 } })
-                .toFormat('jpeg')
-                .toBuffer();
+            const isMobile = wallpaper.height > wallpaper.width;
+            let thumbnail;
+
+            // If the wallpaper is vertical, make the thumbnail height more
+            // than the height of horizontal thumbnails.
+            if (isMobile) {
+                thumbnail = await sharp(wallpaperPath)
+                    .resize(600, 825, { fit: "contain", background: { r: 24, g: 5, b: 41 } })
+                    .toFormat('jpeg')
+                    .toBuffer();
+            } else {
+                thumbnail = await sharp(wallpaperPath)
+                    .resize(600, 350, { fit: "contain", background: { r: 24, g: 5, b: 41 } })
+                    .toFormat('jpeg')
+                    .toBuffer();
+            }
 
             return res.status(200).end(thumbnail);
         } else {

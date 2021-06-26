@@ -99,12 +99,10 @@ export const getThumbnail = async (req: Request, res: Response) => {
             if (isMobile) {
                 thumbnail = await sharp(wallpaperPath)
                     .resize(600, 825, { fit: "contain", background: { r: 24, g: 5, b: 41 } })
-                    .toFormat('jpeg')
                     .toBuffer();
             } else {
                 thumbnail = await sharp(wallpaperPath)
                     .resize(600, 350, { fit: "contain", background: { r: 24, g: 5, b: 41 } })
-                    .toFormat('jpeg')
                     .toBuffer();
             }
 
